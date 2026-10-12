@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tracker Demo — CausalFunnel Analytics</title>
+
+    <!--
+      tracker.js integration
+      ──────────────────────
+      1. The src="/tracker.js" path works when this file is served by the Vite
+         dev server (files inside frontend/public/ are served at the root path).
+      2. data-api-url tells tracker.js where the backend is. Change this when
+         deploying to production.
+      3. The script tag has no "async" or "defer" attribute. tracker.js reads
+         document.currentScript to find this tag, which requires synchronous
+         execution. Alternatively, you can place it just before </body>.
+    -->
+    <script src="/tracker.js" data-api-url="http://localhost:5000/api/events"></script>
+
+    <style>
+      /* ── Reset & base ── */
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        font-family: system-ui, -apple-system, sans-serif;
+        background: #f5f5f5;
+        color: #222;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 2rem 1rem;
+        gap: 2rem;
+      }
+
+      /* ── Header ── */
+      header {
+        text-align: center;
+        max-width: 640px;
+      }
+      header h1 { font-size: 1.8rem; margin-bottom: 0.4rem; }
+      header p  { color: #555; font-size: 0.95rem; line-height: 1.5; }
+
+      /* ── Info banner ── */
+      .banner {
+        background: #e8f4fd;
+        border-left: 4px solid #2196f3;
+        padding: 1rem 1.25rem;
+        border-radius: 4px;
+        width: 100%;
+        max-width: 640px;
+        font-size: 0.9rem;
+        line-height: 1.6;
+      }
+      .banner strong { display: block; margin-bottom: 0.25rem; color: #1565c0; }
+
+      /* ── Demo card ── */
+      .card {
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 1px 6px rgba(0,0,0,.1);
+        padding: 1.5rem;
+        width: 100%;
+        max-width: 640px;
+      }
+      .card h2 { font-size: 1.1rem; margin-bottom: 1rem; }
+
+      /* ── Buttons ── */
+      .btn-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+      }
+      button {
+        padding: 0.6rem 1.2rem;
+        border: none;
+        border-radius: 6px;
+        font-size: 0.95rem;
+        cursor: pointer;
+        background: #1976d2;
+        color: #fff;
+        transition: background 0.15s;
+      }
+      button:hover  { background: #1251a3; }
+      button.danger { background: #c62828; }
+      button.danger:hover { background: #8e0000; }
+      button.neutral { background: #455a64; }
+      button.neutral:hover { background: #263238; }
+
+      /* ── Link row ── */
+      .link-row { margin-top: 1rem; display: flex; gap: 1rem; font-size: 0.9rem; }
+      .link-row a { color: #1976d2; }
+
+      /* ── Log area ── */
+      #log {
+        background: #1e1e1e;
+        color: #d4d4d4;
+        font-family: 'Courier New', monospace;
+        font-size: 0.82rem;
+        border-radius: 6px;
+        padding: 1rem;
+        min-height: 120px;
+        max-height: 260px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        width: 100%;
+        max-width: 640px;
+      }
+      #log .ts   { color: #9cdcfe; }
+      #log .info { color: #4ec9b0; }
+      #log .warn { color: #ce9178; }
+
+      /* ── Session badge ── */
+      #session-display {
+        font-size: 0.78rem;
+        color: #555;
+        background: #ececec;
+        padding: 0.4rem 0.8rem;
+        border-radius: 4px;
+        word-break: break-all;
+        max-width: 640px;
+        width: 100%;
+      }
+    </style>
+  </head>
+  <body>
+
+    <header>
+      <h1>🔍 Tracker Demo</h1>
+      <p>
+        This page demonstrates the CausalFunnel analytics tracker.
+        Every click and page load is sent to the backend API.
+        Open the browser <strong>Network tab</strong> (F12) to watch requests fly.
+      </p>
+    </header>
+
+    <!-- Session info -->
+    <div id="session-display">Session ID: loading…</div>
+
+    <div class="banner">
+      <strong>ℹ️ How to observe events</strong>
+      1. Open DevTools → Network tab → filter by <code>api/events</code>.<br>
+      2. Click any button below — watch the POST request appear instantly.<br>
+      3. After clicking, run <code>GET http://localhost:5000/api/sessions</code>
+         in a new tab to confirm events were stored.
+    </div>
+
+    <!-- Clickable elements for testing -->
+    <div class="card">
+      <h2>Click targets — each click sends a tracked event</h2>
+      <div class="btn-row">
+        <button id="btn-primary">Primary Button</button>
+        <button class="danger" id="btn-danger">Danger Button</button>
+        <button class="neutral" id="btn-neutral">Neutral Button</button>
+      </div>
+
+      <!-- Links that navigate away — tests keepalive delivery -->
+      <div class="link-row">
+        <a href="http://localhost:5173/" id="link-home">
+          Go to React App (same tab — tests keepalive)
+        </a>
+        <a href="http://localhost:5173/" target="_blank" id="link-new-tab">
+          Open React App in new tab (new session)
+        </a>
+      </div>
+    </div>
+
+    <!-- Live event log (shows what the tracker is doing) -->
+    <div class="card">
+      <h2>Live event log</h2>
+      <p style="font-size:0.85rem;color:#666;margin-bottom:0.75rem;">
+        This log is produced by the demo page itself — not by tracker.js.
+        It is for debugging only and is not part of the tracking script.
+      </p>
+      <div id="log"><span class="info">Waiting for events…</span></div>
+    </div>
+
+    <script>
+      // ── Demo page instrumentation (NOT part of tracker.js) ────────────────
+      // This block intercepts fetch() calls made by tracker.js purely to show
+      // them in the on-page log. Real projects would not include this.
+
+      var logEl = document.getElementById('log');
+      var sessionEl = document.getElementById('session-display');
+
+      // Show the session ID from sessionStorage
+      var sid = sessionStorage.getItem('cf_session_id') || '(not set yet)';
+      sessionEl.textContent = 'Session ID (this tab): ' + sid;
+
+      function appendLog(type, message) {
+        var now = new Date().toLocaleTimeString();
+        var line = document.createElement('div');
+        line.innerHTML =
+          '<span class="ts">[' + now + ']</span> ' +
+          '<span class="' + type + '">' + message + '</span>';
+        logEl.appendChild(line);
+        // Remove initial placeholder text on first real entry
+        var placeholder = logEl.querySelector('.info');
+        if (placeholder && placeholder.textContent === 'Waiting for events…') {
+          logEl.removeChild(placeholder);
+        }
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      // Monkey-patch fetch to log every tracker call.
+      // This approach works because tracker.js runs before this <script> block
+      // only if it's in <head>. We re-wrap after DOMContentLoaded as a safety.
+      var _originalFetch = window.fetch;
+      window.fetch = function (url, options) {
+        if (url && url.toString().includes('api/events') && options && options.body) {
+          try {
+            var payload = JSON.parse(options.body);
+            appendLog(
+              'info',
+              '↑ POST ' + url + ' — ' + payload.event_type +
+                (payload.event_type === 'click'
+                  ? ' @ (' + payload.x + ', ' + payload.y + ')'
+                  : '')
+            );
+          } catch (_) { /* ignore parse errors */ }
+        }
+        return _originalFetch.apply(this, arguments)
+          .then(function (res) {
+            if (url && url.toString().includes('api/events')) {
+              appendLog(res.ok ? 'info' : 'warn', '✓ Response: HTTP ' + res.status);
+            }
+            return res;
+          })
+          .catch(function (err) {
+            if (url && url.toString().includes('api/events')) {
+              appendLog('warn', '✗ Network error: ' + err.message);
+            }
+            throw err;
+          });
+      };
+
+      // Button click labels
+      document.getElementById('btn-primary').addEventListener('click', function () {
+        appendLog('info', 'You clicked "Primary Button"');
+      });
+      document.getElementById('btn-danger').addEventListener('click', function () {
+        appendLog('info', 'You clicked "Danger Button"');
+      });
+      document.getElementById('btn-neutral').addEventListener('click', function () {
+        appendLog('info', 'You clicked "Neutral Button"');
+      });
+    </script>
+
+  </body>
+</html>
